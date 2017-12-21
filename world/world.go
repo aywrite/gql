@@ -1,12 +1,15 @@
 package world
 
 import (
-	"database/sql"
+	"context"
+	"errors"
+	"gql/models"
 	"log"
 	"strconv"
 
 	_ "github.com/lib/pq"
 	graphql "github.com/neelance/graphql-go"
+	"github.com/nicksrandall/dataloader"
 )
 
 var BasicSchema = `
@@ -29,143 +32,169 @@ var BasicSchema = `
     }
 `
 
-var (
-	DBConn *sql.DB
-)
+type Resolver struct{}
 
-type BasicResolver struct{}
+type CountryResolver struct {
+	code   graphql.ID
+	loader *dataloader.Loader
+}
 
-func (r *BasicResolver) City(args struct{ ID graphql.ID }) *cityResolver {
-	city, err := getCity(args.ID)
+func NewCountryResolver(ctx context.Context, id graphql.ID) (*CountryResolver, error) {
+	loader, found := ctx.Value("countryLoader").(*dataloader.Loader)
+	if !found {
+		return nil, errors.New("unable to find counrty loader")
+	}
+
+	if id == graphql.ID("") {
+		return nil, errors.New("no county ID specified")
+	}
+
+	return &CountryResolver{id, loader}, nil
+}
+
+func (r *CountryResolver) load() (*models.Country, error) {
+	// we can have any kinds of necessary checks here
+	if r.loader == nil {
+		return nil, errors.New("missing country loader")
+	}
+
+	// kind of verbose, but makes code bulletproof and easy to debug
+	if r.code == graphql.ID("") {
+		return nil, errors.New("missing country key")
+	}
+
+	// use the loader we attached in the constructor
+	thunk := r.loader.Load(context.TODO(), r.code)
+	data, err := thunk()
+	if err != nil {
+		return nil, err
+	}
+
+	country, ok := data.(*models.Country)
+	if !ok {
+		return nil, errors.New("unable to convert response to Country")
+	}
+	return country, nil
+}
+
+func (r *CountryResolver) ID() graphql.ID {
+	c, err := r.load()
 	if err != nil {
 		log.Fatal(err)
 	}
-	return &cityResolver{city}
+	return graphql.ID(c.Code)
 }
 
-func (r *BasicResolver) Country(args struct{ ID graphql.ID }) *countryResolver {
-	country, err := getCountry(args.ID)
+func (r *CountryResolver) Name() string {
+	c, err := r.load()
 	if err != nil {
 		log.Fatal(err)
 	}
-	return &countryResolver{country}
+	return c.Name
 }
 
-type cityResolver struct {
-	c *city
-}
-
-func (r *cityResolver) ID() graphql.ID {
-	return graphql.ID(strconv.Itoa(r.c.ID))
-}
-
-func (r *cityResolver) Name() string {
-	return r.c.Name
-}
-
-func (r *cityResolver) Country() *countryResolver {
-	country, err := getCountry(graphql.ID(r.c.CountryCode))
-	if err != nil {
-		log.Fatal(err)
-	}
-	return &countryResolver{country}
-}
-
-type countryResolver struct {
-	c *country
-}
-
-func (r *countryResolver) ID() graphql.ID {
-	return graphql.ID(r.c.Code)
-}
-
-func (r *countryResolver) Name() string {
-	return r.c.Name
-}
-
-func (r *countryResolver) Cities() *[]*cityResolver {
-	code := graphql.ID(r.c.Code)
-	return resolveCities(code)
-}
-
-type city struct {
-	ID          int
-	Name        string
-	CountryCode string
-}
-
-type country struct {
-	Code string
-	Name string
-}
-
-type language struct {
-	ID   string
-	Name string
-}
-
-func getCity(ID graphql.ID) (*city, error) {
-	var err error
-	connStr := "user=world dbname=world-db password=world123 sslmode=disable"
-	DBConn, err = sql.Open("postgres", connStr)
+func (r *CountryResolver) Cities(ctx context.Context) *[]*CityResolver {
+	c, err := r.load()
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	var id int
-	var name string
-	var code string
-	err = DBConn.QueryRow("SELECT id, name, country_code FROM city WHERE id = $1", ID).Scan(&id, &name, &code)
-	if err != nil {
-		log.Fatal(err)
-	}
-	log.Printf("FETCH city id = %d", id)
-	return &city{id, name, code}, nil
-}
-
-func resolveCities(ID graphql.ID) *[]*cityResolver {
-	connStr := "user=world dbname=world-db password=world123 sslmode=disable"
-	DBConn, err := sql.Open("postgres", connStr)
-	if err != nil {
-		log.Fatal(err)
-	}
-	var cities []*cityResolver
-
-	rows, err := DBConn.Query("SELECT id, name, country_code FROM city WHERE country_code = $1", ID)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var id int
-		var name string
-		var code string
-		if err := rows.Scan(&id, &name, &code); err != nil {
+	var resolvers []*CityResolver
+	for _, cityID := range c.Cities {
+		id := graphql.ID(strconv.FormatInt(cityID, 10))
+		resolver, err := NewCityResolver(ctx, id)
+		if err != nil {
 			log.Fatal(err)
 		}
-		cities = append(cities, &cityResolver{&city{id, name, code}})
+		resolvers = append(resolvers, resolver)
 	}
-	if err := rows.Err(); err != nil {
-		log.Fatal(err)
-	}
-	log.Printf("FETCH cites code = %s", ID)
-	return &cities
+	return &resolvers
 }
 
-func getCountry(ID graphql.ID) (*country, error) {
-	var err error
-	connStr := "user=world dbname=world-db password=world123 sslmode=disable"
-	DBConn, err = sql.Open("postgres", connStr)
+func (r *Resolver) Country(ctx context.Context, args struct{ ID graphql.ID }) *CountryResolver {
+	resolver, err := NewCountryResolver(ctx, args.ID)
+	if err != nil {
+		log.Fatal(err)
+	}
+	return resolver
+}
+
+type CityResolver struct {
+	id     graphql.ID
+	loader *dataloader.Loader
+}
+
+func NewCityResolver(ctx context.Context, id graphql.ID) (*CityResolver, error) {
+	loader, found := ctx.Value("cityLoader").(*dataloader.Loader)
+	if !found {
+		return nil, errors.New("unable to find city loader")
+	}
+
+	if id == graphql.ID("") {
+		return nil, errors.New("no city ID specified")
+	}
+
+	return &CityResolver{id, loader}, nil
+}
+
+func (r *CityResolver) load() (*models.City, error) {
+	// we can have any kinds of necessary checks here
+	if r.loader == nil {
+		return nil, errors.New("missing city loader")
+	}
+
+	// kind of verbose, but makes code bulletproof and easy to debug
+	if r.id == graphql.ID("") {
+		return nil, errors.New("missing city key")
+	}
+
+	// use the loader we attached in the constructor
+	thunk := r.loader.Load(context.TODO(), r.id)
+	data, err := thunk()
+	if err != nil {
+		return nil, err
+	}
+
+	city, ok := data.(*models.City)
+	if !ok {
+		return nil, errors.New("unable to convert response to City")
+	}
+	return city, nil
+}
+
+func (r *CityResolver) ID() graphql.ID {
+	c, err := r.load()
+	if err != nil {
+		log.Fatal(err)
+	}
+	return graphql.ID(strconv.Itoa(c.ID))
+}
+
+func (r *CityResolver) Name() string {
+	c, err := r.load()
+	if err != nil {
+		log.Fatal(err)
+	}
+	return c.Name
+}
+
+func (r *CityResolver) Country(ctx context.Context) *CountryResolver {
+	c, err := r.load()
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	var code string
-	var name string
-	err = DBConn.QueryRow("SELECT code, name FROM country WHERE code = $1", ID).Scan(&code, &name)
+	resolver, err := NewCountryResolver(ctx, graphql.ID(c.CountryCode))
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Printf("FETCH country code = %s", code)
-	return &country{code, name}, nil
+	return resolver
+}
+
+func (r *Resolver) City(ctx context.Context, args struct{ ID graphql.ID }) *CityResolver {
+	resolver, err := NewCityResolver(ctx, args.ID)
+	if err != nil {
+		log.Fatal(err)
+	}
+	return resolver
 }

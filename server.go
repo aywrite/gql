@@ -1,26 +1,46 @@
 package main
 
 import (
+	"context"
 	"gql/world"
 	"log"
 	"net/http"
 
 	"github.com/neelance/graphql-go"
 	"github.com/neelance/graphql-go/relay"
+	"github.com/nicksrandall/dataloader"
 )
 
 var schema *graphql.Schema
 
 func init() {
-	schema = graphql.MustParseSchema(world.BasicSchema, &world.BasicResolver{})
+	schema = graphql.MustParseSchema(world.BasicSchema, &world.Resolver{})
+}
+
+func uiHandler(w http.ResponseWriter, req *http.Request) {
+	w.Write(page)
+}
+
+func queryHandler(w http.ResponseWriter, req *http.Request) {
+	ctx := req.Context()
+
+	countryLoader := &world.CountryLoader{}
+	batchFunc := countryLoader.Attach(ctx)
+	loader := dataloader.NewBatchedLoader(batchFunc)
+	ctx = context.WithValue(ctx, "countryLoader", loader)
+
+	cityLoader := &world.CityLoader{}
+	batchFunc = cityLoader.Attach(ctx)
+	loader = dataloader.NewBatchedLoader(batchFunc)
+	ctx = context.WithValue(ctx, "cityLoader", loader)
+
+	handler := relay.Handler{Schema: schema}
+	handler.ServeHTTP(w, req.WithContext(ctx))
 }
 
 func main() {
-	http.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write(page)
-	}))
-
-	http.Handle("/query", &relay.Handler{Schema: schema})
+	http.Handle("/", http.HandlerFunc(uiHandler))
+	http.Handle("/query", http.HandlerFunc(queryHandler))
 
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
