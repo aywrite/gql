@@ -52,7 +52,7 @@ func NewCountryResolver(ctx context.Context, id graphql.ID) (*CountryResolver, e
 	return &CountryResolver{id, loader}, nil
 }
 
-func (r *CountryResolver) load() (*models.Country, error) {
+func (r *CountryResolver) load(ctx context.Context) (*models.Country, error) {
 	// we can have any kinds of necessary checks here
 	if r.loader == nil {
 		return nil, errors.New("missing country loader")
@@ -64,7 +64,7 @@ func (r *CountryResolver) load() (*models.Country, error) {
 	}
 
 	// use the loader we attached in the constructor
-	thunk := r.loader.Load(context.TODO(), r.code)
+	thunk := r.loader.Load(ctx, r.code)
 	data, err := thunk()
 	if err != nil {
 		return nil, err
@@ -77,16 +77,16 @@ func (r *CountryResolver) load() (*models.Country, error) {
 	return country, nil
 }
 
-func (r *CountryResolver) ID() graphql.ID {
-	c, err := r.load()
+func (r *CountryResolver) ID(ctx context.Context) graphql.ID {
+	c, err := r.load(ctx)
 	if err != nil {
 		log.Fatal(err)
 	}
 	return graphql.ID(c.Code)
 }
 
-func (r *CountryResolver) Name() string {
-	c, err := r.load()
+func (r *CountryResolver) Name(ctx context.Context) string {
+	c, err := r.load(ctx)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -94,7 +94,7 @@ func (r *CountryResolver) Name() string {
 }
 
 func (r *CountryResolver) Cities(ctx context.Context) *[]*CityResolver {
-	c, err := r.load()
+	c, err := r.load(ctx)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -137,7 +137,7 @@ func NewCityResolver(ctx context.Context, id graphql.ID) (*CityResolver, error) 
 	return &CityResolver{id, loader}, nil
 }
 
-func (r *CityResolver) load() (*models.City, error) {
+func (r *CityResolver) load(ctx context.Context) (*models.City, error) {
 	// we can have any kinds of necessary checks here
 	if r.loader == nil {
 		return nil, errors.New("missing city loader")
@@ -149,7 +149,7 @@ func (r *CityResolver) load() (*models.City, error) {
 	}
 
 	// use the loader we attached in the constructor
-	thunk := r.loader.Load(context.TODO(), r.id)
+	thunk := r.loader.Load(ctx, r.id)
 	data, err := thunk()
 	if err != nil {
 		return nil, err
@@ -162,16 +162,16 @@ func (r *CityResolver) load() (*models.City, error) {
 	return city, nil
 }
 
-func (r *CityResolver) ID() graphql.ID {
-	c, err := r.load()
+func (r *CityResolver) ID(ctx context.Context) graphql.ID {
+	c, err := r.load(ctx)
 	if err != nil {
 		log.Fatal(err)
 	}
 	return graphql.ID(strconv.Itoa(c.ID))
 }
 
-func (r *CityResolver) Name() string {
-	c, err := r.load()
+func (r *CityResolver) Name(ctx context.Context) string {
+	c, err := r.load(ctx)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -179,7 +179,7 @@ func (r *CityResolver) Name() string {
 }
 
 func (r *CityResolver) Country(ctx context.Context) *CountryResolver {
-	c, err := r.load()
+	c, err := r.load(ctx)
 	if err != nil {
 		log.Fatal(err)
 	}
