@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"log"
+	"time"
 
 	"github.com/lib/pq"
 	graphql "github.com/neelance/graphql-go"
@@ -35,7 +36,9 @@ func RetrieveCities(ctx context.Context, ids []graphql.ID) ([]*City, error) {
 		return cities, err
 	}
 
+	start := time.Now()
 	rows, err := DBConn.Query("SELECT id, name, country_code FROM city WHERE id = ANY($1)", pq.Array(ids))
+	elapsed := time.Since(start)
 	if err != nil {
 		return cities, err
 	}
@@ -54,7 +57,7 @@ func RetrieveCities(ctx context.Context, ids []graphql.ID) ([]*City, error) {
 		return cities, err
 	}
 
-	log.Printf("FETCH cites code = %s", ids)
+	log.Printf("FETCH cites took %s for code(s) = %s", elapsed, ids)
 	return cities, nil
 }
 
@@ -75,7 +78,9 @@ func RetrieveCountries(ctx context.Context, ids []graphql.ID) ([]*Country, error
 	GROUP BY country.code
 	`
 
+	start := time.Now()
 	rows, err := DBConn.Query(query_string, pq.Array(ids))
+	elapsed := time.Since(start)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -93,6 +98,6 @@ func RetrieveCountries(ctx context.Context, ids []graphql.ID) ([]*Country, error
 	if err := rows.Err(); err != nil {
 		log.Fatal(err)
 	}
-	log.Printf("FETCH countries code(s) %s", ids)
+	log.Printf("FETCH countries took %s for code(s) %s", elapsed, ids)
 	return countries, nil
 }
