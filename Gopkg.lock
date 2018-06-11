@@ -2,38 +2,65 @@
 
 
 [[projects]]
+  name = "github.com/graph-gophers/dataloader"
+  packages = ["."]
+  revision = "78139374585c29dcb97b8f33089ed11959e4be59"
+  version = "v5"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/graph-gophers/graphql-go"
+  packages = [
+    ".",
+    "errors",
+    "internal/common",
+    "internal/exec",
+    "internal/exec/packer",
+    "internal/exec/resolvable",
+    "internal/exec/selected",
+    "internal/query",
+    "internal/schema",
+    "internal/validation",
+    "introspection",
+    "log",
+    "trace"
+  ]
+  revision = "bb9738501bd42a6536227b96068349b814379d6e"
+
+[[projects]]
   branch = "master"
   name = "github.com/lib/pq"
-  packages = [".","oid"]
-  revision = "83612a56d3dd153a94a629cd64925371c9adad78"
-
-[[projects]]
-  branch = "master"
-  name = "github.com/neelance/graphql-go"
-  packages = [".","errors","internal/common","internal/exec","internal/exec/packer","internal/exec/resolvable","internal/exec/selected","internal/query","internal/schema","internal/validation","introspection","log","relay","trace"]
-  revision = "beff08417b04a91f0a7618b55786d63eec833b9f"
-
-[[projects]]
-  name = "github.com/nicksrandall/dataloader"
-  packages = ["."]
-  revision = "02614916d80019649f6461b3216d575b0b6ced0d"
-  version = "v4.1.0"
+  packages = [
+    ".",
+    "oid"
+  ]
+  revision = "90697d60dd844d5ef6ff15135d0203f65d2f53b8"
 
 [[projects]]
   name = "github.com/opentracing/opentracing-go"
-  packages = [".","ext","log"]
+  packages = [
+    ".",
+    "ext",
+    "log"
+  ]
   revision = "1949ddbfd147afd4d964a9f00b24eb291e0e7c38"
   version = "v1.0.2"
+
+[[projects]]
+  name = "github.com/pkg/errors"
+  packages = ["."]
+  revision = "645ef00459ed84a119197bfb8d8205042c6df63d"
+  version = "v0.8.0"
 
 [[projects]]
   branch = "master"
   name = "golang.org/x/net"
   packages = ["context"]
-  revision = "d866cfc389cec985d6fda2859936a575a55a3ab6"
+  revision = "1e491301e022f8f977054da4c2d852decd59571f"
 
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "85a69224e5f17eb945329842dbe32611b8b3e85afbf12ad4739f311ccbe4a283"
+  inputs-digest = "bfa94056f7198b8bab4afe7c69a6f9788c1121b664165dd533f50e2a5c7d78dd"
   solver-name = "gps-cdcl"
   solver-version = 1

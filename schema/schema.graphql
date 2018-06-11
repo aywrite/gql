@@ -1,0 +1,17 @@
+schema {
+	query: Query
+}
+type Query {
+	city(id: ID!): City
+	country(id: ID!): Country
+}
+type City {
+	id: ID!
+	name: String!
+	country: Country
+}
+type Country {
+	id: ID!
+	name: String!
+	cities: [City]
+}

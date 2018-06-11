@@ -1,83 +1,67 @@
+// Command graphql-go-example starts an HTTP GraphQL API server which is backed by data
+// against the https://swapi.co REST API.
 package main
 
 import (
-	"context"
-	"gql/world"
 	"log"
 	"net/http"
+	"time"
 
-	"github.com/neelance/graphql-go"
-	"github.com/neelance/graphql-go/relay"
-	"github.com/nicksrandall/dataloader"
+	"github.com/aywrite/gql/handler"
+	"github.com/aywrite/gql/loader"
+	"github.com/aywrite/gql/models"
+	"github.com/aywrite/gql/resolver"
+	"github.com/aywrite/gql/schema"
+	graphql "github.com/graph-gophers/graphql-go"
 )
 
-var schema *graphql.Schema
-
-func init() {
-	schema = graphql.MustParseSchema(world.BasicSchema, &world.Resolver{})
-}
-
-func uiHandler(w http.ResponseWriter, req *http.Request) {
-	w.Write(page)
-}
-
-func queryHandler(w http.ResponseWriter, req *http.Request) {
-	ctx := req.Context()
-
-	countryLoader := &world.CountryLoader{}
-	batchFunc := countryLoader.Attach(ctx)
-	loader := dataloader.NewBatchedLoader(batchFunc)
-	ctx = context.WithValue(ctx, "countryLoader", loader)
-
-	cityLoader := &world.CityLoader{}
-	batchFunc = cityLoader.Attach(ctx)
-	loader = dataloader.NewBatchedLoader(batchFunc)
-	ctx = context.WithValue(ctx, "cityLoader", loader)
-
-	handler := relay.Handler{Schema: schema}
-	handler.ServeHTTP(w, req.WithContext(ctx))
-}
-
 func main() {
-	http.Handle("/", http.HandlerFunc(uiHandler))
-	http.Handle("/query", http.HandlerFunc(queryHandler))
+	// Tweak configuration values here.
+	var (
+		addr              = ":8000"
+		readHeaderTimeout = 1 * time.Second
+		writeTimeout      = 10 * time.Second
+		idleTimeout       = 90 * time.Second
+		maxHeaderBytes    = http.DefaultMaxHeaderBytes
+	)
 
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	log.SetFlags(log.Lshortfile | log.LstdFlags)
+	root := &resolver.Resolver{}
+
+	db := models.DB{
+		ConnStr: "user=world dbname=world-db password=world123 sslmode=disable port=5433",
+	}
+
+	// Create the request handler; inject dependencies.
+	h := handler.GraphQL{
+		// Parse and validate schema. Panic if unable to do so.
+		Schema:  graphql.MustParseSchema(schema.String(), root),
+		Loaders: loader.Initialize(db),
+	}
+
+	// Register handlers to routes.
+	mux := http.NewServeMux()
+	mux.Handle("/", handler.GraphiQL{})
+	mux.Handle("/graphql/", h)
+	mux.Handle("/graphql", h) // Register without a trailing slash to avoid redirect.
+
+	// Configure the HTTP server.
+	s := &http.Server{
+		Addr:              addr,
+		Handler:           mux,
+		ReadHeaderTimeout: readHeaderTimeout,
+		WriteTimeout:      writeTimeout,
+		IdleTimeout:       idleTimeout,
+		MaxHeaderBytes:    maxHeaderBytes,
+	}
+
+	// Begin listeing for requests.
+	log.Printf("Listening for requests on %s", s.Addr)
+
+	if err := s.ListenAndServe(); err != nil {
+		log.Println("server.ListenAndServe:", err)
+	}
+
+	// TODO: intercept shutdown signals for cleanup of connections.
+	log.Println("Shut down.")
 }
-
-var page = []byte(`
-<!DOCTYPE html>
-<html>
-	<head>
-		<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/graphiql/0.10.2/graphiql.css" />
-		<script src="https://cdnjs.cloudflare.com/ajax/libs/fetch/1.1.0/fetch.min.js"></script>
-		<script src="https://cdnjs.cloudflare.com/ajax/libs/react/15.5.4/react.min.js"></script>
-		<script src="https://cdnjs.cloudflare.com/ajax/libs/react/15.5.4/react-dom.min.js"></script>
-		<script src="https://cdnjs.cloudflare.com/ajax/libs/graphiql/0.10.2/graphiql.js"></script>
-	</head>
-	<body style="width: 100%; height: 100%; margin: 0; overflow: hidden;">
-		<div id="graphiql" style="height: 100vh;">Loading...</div>
-		<script>
-			function graphQLFetcher(graphQLParams) {
-				return fetch("/query", {
-					method: "post",
-					body: JSON.stringify(graphQLParams),
-					credentials: "include",
-				}).then(function (response) {
-					return response.text();
-				}).then(function (responseBody) {
-					try {
-						return JSON.parse(responseBody);
-					} catch (error) {
-						return responseBody;
-					}
-				});
-			}
-			ReactDOM.render(
-				React.createElement(GraphiQL, {fetcher: graphQLFetcher}),
-				document.getElementById("graphiql")
-			);
-		</script>
-	</body>
-</html>
-`)
